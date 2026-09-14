@@ -15,7 +15,7 @@ from frappe.utils import (
 )
 from india_compliance.gst_india.utils.e_invoice import (EInvoiceData, log_e_invoice)
 from india_compliance.exceptions import GatewayTimeoutError
-from india_compliance.gst_india.api_classes.e_invoice import EInvoiceAPI
+from india_compliance.gst_india.api_classes.nic.e_invoice import EInvoiceAPI
 from india_compliance.gst_india.constants import (
     CURRENCY_CODES,
     EXPORT_TYPES,
@@ -40,10 +40,7 @@ from india_compliance.gst_india.utils.e_waybill import (
     _cancel_e_waybill,
     log_and_process_e_waybill_generation,
 )
-from india_compliance.gst_india.utils.transaction_data import (
-    GSTTransactionData,
-    validate_non_gst_items,
-)
+from india_compliance.gst_india.utils.transaction_data import GSTTransactionData
 
 def process_items_and_update_data(data):
     """
@@ -97,15 +94,15 @@ def generate_e_invoice(docname, throw=True, force=False):
     try:
         if (
             not force
-            and settings.enable_retry_e_invoice_generation
-            and settings.is_retry_e_invoice_generation_pending
+            and settings.enable_retry_einv_ewb_generation
+            and settings.is_retry_einv_ewb_generation_pending
         ):
             raise GatewayTimeoutError
 
         # Fetch data from the document
         e_invoice_data  = EInvoiceData(doc).get_data()
         data = process_items_and_update_data(e_invoice_data)
-        api = EInvoiceAPI(doc)
+        api = EInvoiceAPI.create(doc)
         result = api.generate_irn(data)
 
         # Handle Duplicate IRN
@@ -119,10 +116,10 @@ def generate_e_invoice(docname, throw=True, force=False):
     except GatewayTimeoutError as e:
         einvoice_status = "Failed"
 
-        if settings.enable_retry_e_invoice_generation:
+        if settings.enable_retry_einv_ewb_generation:
             einvoice_status = "Auto-Retry"
             settings.db_set(
-                "is_retry_e_invoice_generation_pending", 1, update_modified=False
+                "is_retry_einv_ewb_generation_pending", 1, update_modified=False
             )
 
         doc.db_set({"einvoice_status": einvoice_status}, commit=True)
